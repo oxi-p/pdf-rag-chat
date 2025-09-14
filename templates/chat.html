@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with your PDF</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <h1>Gemini RAG</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/upload">Upload PDF</a>
+            <a href="/chat" class="active">Chat</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Chat with your PDF</h2>
+        <div id="chat-container">
+            <div id="chat-history">
+                <div class="bot-message">Hello! Ask me anything about the document you uploaded.</div>
+            </div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type your message here...">
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </main>
+
+    <div id="no-index-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p>No document has been indexed yet. Please upload a PDF to begin.</p>
+            <div class="modal-buttons">
+                <a href="/upload"><button id="go-to-upload">Go to Upload</button></a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatHistory = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const noIndexModal = document.getElementById('no-index-modal');
+
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/index-status');
+                const data = await response.json();
+                if (!data.indexed) {
+                    noIndexModal.style.display = 'flex';
+                }
+            } catch (error) {
+                console.error("Could not check index status.", error);
+            }
+        });
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (message === '') return;
+
+            // Display user message
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'user-message';
+            userMessageDiv.textContent = message;
+            chatHistory.appendChild(userMessageDiv);
+            chatInput.value = '';
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+
+            // Send message to the server and get response
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: message })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'An error occurred.');
+                }
+
+                const data = await response.json();
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'bot-message';
+                botMessageDiv.textContent = data.answer;
+                chatHistory.appendChild(botMessageDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+            } catch (error) {
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'bot-message';
+                botMessageDiv.textContent = error.message;
+                botMessageDiv.style.color = 'red';
+                chatHistory.appendChild(botMessageDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

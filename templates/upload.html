@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PDF</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <h1>Gemini RAG</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/upload" class="active">Upload PDF</a>
+            <a href="/chat">Chat</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Upload a PDF Document</h2>
+        <p>Select a PDF file from your computer to upload and process. The contents of the PDF will be used to answer your questions in the chat.</p>
+        <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+            <label for="file-upload">Drag and drop a PDF file here, or click to select a file.</label>
+            <input id="file-upload" type="file" name="file" accept="application/pdf">
+            <button type="submit">Upload and Process</button>
+        </form>
+        <div id="message-area"></div>
+        <div id="completion-popup" style="display: none;">
+            <p>Indexing complete!</p>
+            <a href="/"><button>Go Home</button></a>
+            <a href="/chat"><button>Go to Chat</button></a>
+        </div>
+    </main>
+
+    <div id="overwrite-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p>An existing index was found. Do you want to overwrite it?</p>
+            <div class="modal-buttons">
+                <button id="confirm-overwrite">Yes, Overwrite</button>
+                <button id="cancel-overwrite">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-upload');
+        const messageArea = document.getElementById('message-area');
+        const completionPopup = document.getElementById('completion-popup');
+        const overwriteModal = document.getElementById('overwrite-modal');
+        const confirmOverwriteBtn = document.getElementById('confirm-overwrite');
+        const cancelOverwriteBtn = document.getElementById('cancel-overwrite');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            messageArea.innerHTML = '';
+            completionPopup.style.display = 'none';
+
+            if (!fileInput.files.length) {
+                showMessage('Please select a file to upload.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            if (file.type !== 'application/pdf') {
+                showMessage('Invalid file type. Please upload a PDF.', 'error');
+                return;
+            }
+
+            try {
+                const indexStatusResponse = await fetch('/index-status');
+                const indexStatusData = await indexStatusResponse.json();
+
+                if (indexStatusData.indexed) {
+                    overwriteModal.style.display = 'flex';
+                    confirmOverwriteBtn.onclick = () => {
+                        overwriteModal.style.display = 'none';
+                        uploadAndProcess();
+                    };
+                    cancelOverwriteBtn.onclick = () => {
+                        overwriteModal.style.display = 'none';
+                    };
+                } else {
+                    uploadAndProcess();
+                }
+            } catch (error) {
+                showMessage('Could not check index status.', 'error');
+            }
+        });
+
+        async function uploadAndProcess() {
+            showMessage('Your document is being indexed. Please wait...', 'info');
+
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'An error occurred during upload.');
+                }
+
+                const data = await response.json();
+                const taskId = data.task_id;
+
+                const intervalId = setInterval(async () => {
+                    try {
+                        const statusResponse = await fetch(`/status/${taskId}`);
+                        if (!statusResponse.ok) {
+                            throw new Error('Could not get status.');
+                        }
+                        const statusData = await statusResponse.json();
+                        if (statusData.status === 'complete') {
+                            clearInterval(intervalId);
+                            messageArea.innerHTML = '';
+                            completionPopup.style.display = 'block';
+                        } else if (statusData.status === 'error') {
+                            clearInterval(intervalId);
+                            showMessage('An error occurred during indexing. Please try again.', 'error');
+                        }
+                    } catch (error) {
+                        clearInterval(intervalId);
+                        showMessage(error.message, 'error');
+                    }
+                }, 5000);
+            } catch (error) {
+                showMessage(error.message, 'error');
+            }
+        }
+
+        function showMessage(message, type) {
+            const messageElement = document.createElement('p');
+            messageElement.textContent = message;
+            messageElement.style.color = type === 'error' ? 'red' : 'black';
+            messageArea.innerHTML = '';
+            messageArea.appendChild(messageElement);
+        }
+    </script>
+</body>
+</html>
