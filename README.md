@@ -19,7 +19,7 @@
 *   **Frontend:** HTML, CSS, JavaScript
 *   **Document Processing:** `unstructured`, `langchain`, `pypdf`
 *   **Vector Store:** ChromaDB
-*   **Embeddings:** Ollama
+*   **Embeddings:** OpenAI or Ollama based on `USE_OLLAMA_EMBED` flag in .env
 *   **LLM:** OpenAI (for summarization and chat)
 
 ## Installation
@@ -43,6 +43,7 @@
 
     ```
     OPENAI_API_KEY=your-api-key
+    USE_OLLAMA_EMBED=true/false
     ```
 
 ## Usage
@@ -52,6 +53,7 @@
     ```bash
     uv run main.py
     ```
+    *Note: There will be a delay of few seconds When you start the app for the first*
 
 2.  **Open your browser:**
 
