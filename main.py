@@ -7,11 +7,11 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from unstructured.partition.pdf import partition_pdf
 from unstructured.chunking.title import chunk_by_title
-import shutil
 
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
+
 from langchain_core.documents import Document
 from langchain.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -32,7 +32,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+use_ollama_embed = os.getenv("USE_OLLAMA_EMBED", "false").lower() == "true"
 
 app = FastAPI()
 retriever = None
@@ -102,7 +102,12 @@ def create_vector_store(documents):
     logger.info("Create embeddings and storing in DB...")
 
     collection_name = "the_collection"
-    embedding_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+    if use_ollama_embed:
+        embedding_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+        logger.info("Using Ollama Embeddings model-mxbai-embed-large:latest")
+    else:
+        embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
+        logger.info("Using OpenAI Embeddings model-text-embedding-3-large")
 
     vectorstore = Chroma(
         collection_name=collection_name, 
@@ -186,7 +191,14 @@ def process_chat_query(query: str) -> str:
     if retriever is None:
         if os.path.exists(MARKER_FILE):
             logger.info("Loading existing vector store...")
-            embedding_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+
+            if use_ollama_embed:
+                embedding_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+                logger.info("Using Ollama Embeddings model-mxbai-embed-large:latest")
+            else:
+                embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
+                logger.info("Using OpenAI Embeddings model-text-embedding-3-large")
+
             vectorstore = Chroma(persist_directory=INDEX_DIR, embedding_function=embedding_model, collection_name="the_collection")
             retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
             logger.info("Retriever created from existing vector store.")
